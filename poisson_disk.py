@@ -1,4 +1,5 @@
 """
+Algorithm by Robert Bridson.
 """
 
 
@@ -6,36 +7,53 @@ from __future__ import annotations
 
 import numpy as np
 from matplotlib import pyplot as plt
+import itertools
 
 pi = np.pi
+
 
 def which_cell(point, grid_cell_size) -> np.ndarray:
     """
     """
 
-    point_cell = [int(np.floor(coord / grid_cell_dim)) for coord, grid_cell_dim in zip(point, grid_cell_size)]
+    point_cell = [int(np.floor(coord / grid_cell_dim))
+                  for coord, grid_cell_dim in zip(point, grid_cell_size)]
     return np.array(point_cell)
 
-def sample_from_annulus(point : np.ndarray, r1, r2) -> np.ndarray:
+
+def sample_from_annulus(point: np.ndarray, r1, r2) -> np.ndarray:
     """
     """
 
     n = len(point)
+    print(f"n={n}")
+
+    # https://en.wikipedia.org/wiki/N-sphere#Spherical_coordinates
 
     r = np.random.uniform(r1, r2)
-    angles = [np.random.uniform(0, pi) for _ in range(n-2)] # n-1 angles required to define a point in n dimensional space
-    angles.append(np.random.uniform(0, 2*pi))
+    # n-1 angles required to define a point in n dimensional space
+    angles = [np.random.uniform(0, pi) for _ in range(n - 2)]
+    angles.append(np.random.uniform(0, 2 * pi))
 
     if n == 2:
-        offset_x = r*np.cos(angles[0])
-        offset_y = r*np.sin(angles[0])
+        offset_x = r * np.cos(angles[0])
+        offset_y = r * np.sin(angles[0])
         offset = np.array([offset_x, offset_y])
+    elif n == 3:
+        offset_x = r * np.sin(angles[0]) * np.cos(angles[1])
+        offset_y = r * np.sin(angles[0]) * np.sin(angles[1])
+        offset_z = r * np.cos(angles[0])
+        offset = np.array([offset_x, offset_y, offset_z])
     else:
-        offset = np.array([r * np.sin(angles[:i]).prod() * np.cos(angles[i]) for i in range(len(angles))])
+        offset = np.array([r * np.sin(angles[:i]).prod() *
+                           np.cos(angles[i]) for i in range(len(angles))])
 
+    print(f"angles={angles}")
+    print(f"offset={offset}")
     new_coords = point + offset
 
     return new_coords
+
 
 def conflicts(point1, point2, d) -> bool:
     """
@@ -51,7 +69,16 @@ def conflicts(point1, point2, d) -> bool:
     else:
         return True
 
+def find_neighbors(cell):
+    """
+    """
 
+    n = len(cell)
+    offset_tuples = list(itertools.product(range(-1,2), repeat=n))
+
+    neighboring_indices = [tuple(cell + np.array(tup)) for tup in offset_tuples]
+
+    return neighboring_indices
 
 
 def pd_sample(min_dist, max_tries, domain, active_list, point_list, cell_size, index_grid):
@@ -61,26 +88,26 @@ def pd_sample(min_dist, max_tries, domain, active_list, point_list, cell_size, i
     k = 0
     while k < max_tries:
 
-        print(f"k={k}")
-
         # pick a point from the active list
         sel_from_active = np.random.randint(0, len(active_list))
         i = active_list[sel_from_active]
         start_point = point_list[i]
 
         # find a new point within the annulus of the selected point
-        new_point = sample_from_annulus(start_point, min_dist, 2*min_dist)
-        test = [(point_coord > dom_lim) or (point_coord < 0) for point_coord, dom_lim in zip(new_point, domain)]
+        new_point = sample_from_annulus(start_point, min_dist, 2 * min_dist)
+        test = [(point_coord > dom_lim) or (point_coord < 0)
+                for point_coord, dom_lim in zip(new_point, domain)]
         while np.any(test):
-            new_point = sample_from_annulus(start_point, min_dist, 2*min_dist) # resample
-            test = [(point_coord > dom_lim) or (point_coord < 0) for point_coord, dom_lim in zip(new_point, domain)]
+            new_point = sample_from_annulus(
+                start_point, min_dist, 2 * min_dist)  # resample
+            test = [(point_coord > dom_lim) or (point_coord < 0)
+                    for point_coord, dom_lim in zip(new_point, domain)]
 
         # find which cell the new point is in
         new_point_cell = which_cell(new_point, cell_size)
 
         # find indices of neighboring cells
-        neighboring_indices = [new_point_cell + np.array([x, y]) for x in range(-1, 2) for y in range(-1, 2)]
-        neighboring_indices = [tuple(index) for index in neighboring_indices]
+        neighboring_indices = find_neighbors(new_point_cell)
 
         # check non-empty neighboring cells for conflicts with new_point
         conflict_list = []
@@ -91,9 +118,8 @@ def pd_sample(min_dist, max_tries, domain, active_list, point_list, cell_size, i
                     print("I checked for a conflict")
                     c = conflicts(neighbor_point, new_point, min_dist)
                     conflict_list.append(c)
-            except: # this is ALWAYS going to the except block for some reason
-               conflict_list.append(False)
-
+            except:
+                conflict_list.append(False)
 
         if np.array(conflict_list).sum() == 0:
             # accept the new point
@@ -106,7 +132,6 @@ def pd_sample(min_dist, max_tries, domain, active_list, point_list, cell_size, i
     return None, sel_from_active
 
 
-
 class PoissonDiskContext():
     """
     """
@@ -116,23 +141,23 @@ class PoissonDiskContext():
         self.n = len(domain)
         self.r = r
         self.cell_size = np.full(self.n, self.r / np.sqrt(self.n))
-        self.grid_dims = np.array([np.ceil(length / cell_dim) for length, cell_dim in zip(self.domain, self.cell_size)]).astype(int)
+        self.grid_dims = np.array([np.ceil(length / cell_dim)
+                                   for length, cell_dim in zip(self.domain, self.cell_size)]).astype(int)
         self.index_grid = np.full(self.grid_dims, -1)
 
         self.active_list = []
         self.point_list = []
         self.current_index = 0
 
-
     def __repr__(self):
         pass
-
 
     def _make_first_point(self) -> None:
         """
         """
 
-        first_point = np.array([np.random.uniform(0, dim) for dim in self.domain])
+        first_point = np.array([np.random.uniform(0, dim)
+                                for dim in self.domain])
         point_cell = which_cell(first_point, self.cell_size)
         self.index_grid[tuple(point_cell)] = self.current_index
 
@@ -146,8 +171,8 @@ class PoissonDiskContext():
         self._make_first_point()
 
         while self.active_list != []:
-            c, s = pd_sample(self.r, 30, self.domain, self.active_list, self.point_list, self.cell_size, self.index_grid)
-            print(f"trying new point {s} in cell {c}")
+            c, s = pd_sample(self.r, 30, self.domain, self.active_list,
+                             self.point_list, self.cell_size, self.index_grid)
 
             if c is not None:
                 self.current_index += 1
