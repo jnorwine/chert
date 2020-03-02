@@ -1,3 +1,9 @@
+"""
+"""
+
+
+from __future__ import annotations
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -98,3 +104,57 @@ def pd_sample(min_dist, max_tries, domain, active_list, point_list, cell_size, i
 
     # return None if no suitable points were found
     return None, sel_from_active
+
+
+
+class PoissonDiskContext():
+    """
+    """
+
+    def __init__(self, domain: np.ndarray, r, ) -> PoissonDiskContext:
+        self.domain = domain
+        self.n = len(domain)
+        self.r = r
+        self.cell_size = np.full(self.n, self.r / np.sqrt(self.n))
+        self.grid_dims = np.array([np.ceil(length / cell_dim) for length, cell_dim in zip(self.domain, self.cell_size)]).astype(int)
+        self.index_grid = np.full(self.grid_dims, -1)
+
+        self.active_list = []
+        self.point_list = []
+        self.current_index = 0
+
+
+    def __repr__(self):
+        pass
+
+
+    def _make_first_point(self) -> None:
+        """
+        """
+
+        first_point = np.array([np.random.uniform(0, dim) for dim in self.domain])
+        point_cell = which_cell(first_point, self.cell_size)
+        self.index_grid[tuple(point_cell)] = self.current_index
+
+        self.active_list.append(self.current_index)
+        self.point_list.append(first_point)
+
+    def generate(self) -> PoissonDiskContext:
+        """
+        """
+
+        self._make_first_point()
+
+        while self.active_list != []:
+            c, s = pd_sample(self.r, 30, self.domain, self.active_list, self.point_list, self.cell_size, self.index_grid)
+            print(f"trying new point {s} in cell {c}")
+
+            if c is not None:
+                self.current_index += 1
+                self.point_list.append(s)
+                self.index_grid[c] = self.current_index
+                self.active_list.append(self.current_index)
+            else:
+                del self.active_list[s]
+
+        return self
